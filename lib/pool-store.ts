@@ -41,9 +41,10 @@ interface PoolStore {
     deleteRecord: (i: number) => void
     reset: () => void
 
-    exportDataJson: () => void
-    exportDataCsv: () => void
-    exportDataTxt: () => void
+    exportJson: () => void
+    exportJornadaCsv: () => void
+    exportJornadaTxt: () => void
+    importJson: (file: File) => Promise<void>
 }
 
 const EMPTY: PoolRecord = {
@@ -64,17 +65,17 @@ const EMPTY: PoolRecord = {
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
-const nowTime = (): string => {
+const nowTime = () => {
     const d = new Date()
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-const today = (): string => {
+const today = () => {
     const d = new Date()
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-const build = (date: string): string => `${date}T${nowTime()}`
+const build = (date: string) => `${date}T${nowTime()}`
 
 const recalc = (r: PoolRecord): PoolRecord => {
     const l = parseFloat(r.clLibre)
@@ -82,9 +83,7 @@ const recalc = (r: PoolRecord): PoolRecord => {
 
     return {
         ...r,
-        clComb: !isNaN(l) && !isNaN(t)
-            ? Math.max(0, t - l).toFixed(2)
-            : "",
+        clComb: !isNaN(l) && !isNaN(t) ? Math.max(0, t - l).toFixed(2) : "",
     }
 }
 
@@ -108,9 +107,7 @@ export const usePoolStore = create<PoolStore>()(
             finishDay() {
                 set((s) => {
                     if (!s.active.start) return s
-
                     const date = s.active.start.slice(0, 10)
-
                     return {
                         active: {
                             ...s.active,
@@ -122,10 +119,7 @@ export const usePoolStore = create<PoolStore>()(
 
             setField(k, v) {
                 set((s) => ({
-                    active: recalc({
-                        ...s.active,
-                        [k]: v,
-                    }),
+                    active: recalc({ ...s.active, [k]: v }),
                 }))
             },
 
@@ -133,40 +127,24 @@ export const usePoolStore = create<PoolStore>()(
                 set((s) => {
                     const checks = [...s.active.checks]
                     checks[i] = !checks[i]
-
-                    return {
-                        active: {
-                            ...s.active,
-                            checks,
-                        },
-                    }
+                    return { active: { ...s.active, checks } }
                 })
             },
 
             setImage(k, v) {
                 set((s) => ({
-                    active: {
-                        ...s.active,
-                        [k]: v,
-                    },
+                    active: { ...s.active, [k]: v },
                 }))
             },
 
             save() {
                 const { active, historial, mode, editingIndex } = get()
-
                 if (!active.start) return
 
                 if (mode === "edit" && editingIndex !== null) {
-                    const updated = [...historial]
-                    updated[editingIndex] = active
-
-                    set({
-                        historial: updated,
-                        active: { ...EMPTY },
-                        mode: "create",
-                        editingIndex: null,
-                    })
+                    const copy = [...historial]
+                    copy[editingIndex] = active
+                    set({ historial: copy, active: { ...EMPTY }, mode: "create", editingIndex: null })
                     return
                 }
 
@@ -181,12 +159,7 @@ export const usePoolStore = create<PoolStore>()(
             editRecord(i) {
                 const item = get().historial[i]
                 if (!item) return
-
-                set({
-                    active: { ...item },
-                    mode: "edit",
-                    editingIndex: i,
-                })
+                set({ active: { ...item }, mode: "edit", editingIndex: i })
             },
 
             deleteRecord(i) {
@@ -196,108 +169,104 @@ export const usePoolStore = create<PoolStore>()(
             },
 
             reset() {
-                set({
-                    active: { ...EMPTY },
-                    mode: "create",
-                    editingIndex: null,
-                })
+                set({ active: { ...EMPTY }, mode: "create", editingIndex: null })
             },
 
-            // -------------------------
-            // EXPORTS
-            // -------------------------
-
-            exportDataJson() {
-                const data = get().historial
-
+            exportJson() {
                 const blob = new Blob(
-                    [JSON.stringify(data, null, 2)],
+                    [JSON.stringify(get().historial, null, 2)],
                     { type: "application/json" }
                 )
-
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement("a")
-
                 a.href = url
                 a.download = "historial_piscina.json"
                 a.click()
-
                 URL.revokeObjectURL(url)
             },
 
-            exportDataCsv() {
+            exportJornadaTxt() {
                 const data = get().historial
 
-                const headers = [
-                    "start",
-                    "end",
-                    "ph",
-                    "clLibre",
-                    "clTotal",
-                    "clComb",
-                    "depurada",
-                    "renovada",
-                    "transparencia",
-                ]
+                const pad = (n: number) => String(n).padStart(2, "0")
 
-                const rows = data.map((r) =>
-                    [
-                        r.start,
-                        r.end,
-                        r.ph,
-                        r.clLibre,
-                        r.clTotal,
-                        r.clComb,
-                        r.depurada,
-                        r.renovada,
-                        r.transparencia,
-                    ]
-                        .map((v) => v ?? "")
-                        .join(",")
-                )
+                const date = (iso: string) => {
+                    const d = new Date(iso)
+                    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`
+                }
 
-                const csv = [headers.join(","), ...rows].join("\n")
+                const time = (iso: string) => {
+                    const d = new Date(iso)
+                    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+                }
 
-                const blob = new Blob([csv], { type: "text/csv" })
-                const url = URL.createObjectURL(blob)
-
-                const a = document.createElement("a")
-                a.href = url
-                a.download = "historial_piscina.csv"
-                a.click()
-
-                URL.revokeObjectURL(url)
-            },
-
-            exportDataTxt() {
-                const data = get().historial
+                const hours = (s: string, e: string) => {
+                    const h = (new Date(e).getTime() - new Date(s).getTime()) / 3600000
+                    return `${Math.max(0, h) % 1 === 0 ? h : h.toFixed(1)}h`
+                }
 
                 const text = data
-                    .map(
-                        (r, i) => `
-Registro ${i + 1}
-Fecha: ${r.start} → ${r.end}
-pH: ${r.ph}
-Cl libre: ${r.clLibre}
-Cl total: ${r.clTotal}
-Cl combinado: ${r.clComb}
-Depurada: ${r.depurada} m³
-Renovada: ${r.renovada} m³
-Transparencia: ${r.transparencia ? "Sí" : "No"}
--------------------
-`
+                    .map((r) =>
+                        r.start && r.end
+                            ? `Dia ${date(r.start)} Inicio ${time(r.start)} Fin ${time(r.end)} Horas ${hours(r.start, r.end)}`
+                            : ""
                     )
+                    .filter(Boolean)
                     .join("\n")
 
                 const blob = new Blob([text], { type: "text/plain" })
                 const url = URL.createObjectURL(blob)
-
                 const a = document.createElement("a")
                 a.href = url
-                a.download = "historial_piscina.txt"
+                a.download = "jornadas_piscina.txt"
                 a.click()
-
                 URL.revokeObjectURL(url)
+            },
+
+            exportJornadaCsv() {
+                const data = get().historial
+
+                const rows = data
+                    .map((r) => {
+                        if (!r.start || !r.end) return ""
+                        const d = new Date(r.start)
+                        const date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`
+                        const start = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+                        const end = `${pad(new Date(r.end).getHours())}:${pad(new Date(r.end).getMinutes())}`
+                        const hours =
+                            (new Date(r.end).getTime() - new Date(r.start).getTime()) / 3600000
+
+                        return `${date},${start},${end},${hours.toFixed(2)}`
+                    })
+                    .filter(Boolean)
+
+                const csv = ["dia,inicio,fin,horas", ...rows].join("\n")
+
+                const blob = new Blob([csv], { type: "text/csv" })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url
+                a.download = "jornadas_piscina.csv"
+                a.click()
+                URL.revokeObjectURL(url)
+            },
+
+            importJson(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                        try {
+                            const parsed = JSON.parse(reader.result as string)
+                            if (!Array.isArray(parsed)) return reject("invalid")
+                            set({ historial: parsed })
+                            resolve()
+                        } catch (e) {
+                            reject(e)
+                        }
+                    }
+                    reader.onerror = reject
+                    reader.readAsText(file)
+                })
             },
         }),
         {
