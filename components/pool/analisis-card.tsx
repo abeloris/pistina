@@ -1,4 +1,5 @@
 "use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -85,9 +86,18 @@ export function AnalisisCard() {
             />
           </div>
 
-          {/* Depurada */}
-          <div className="space-y-1">
+          {/* Agua depurada */}
+          <div className="space-y-2">
             <label className="text-sm font-medium">Agua depurada (m³)</label>
+
+            {active.img1 && (
+              <img
+                src={active.img1}
+                alt="Contador agua depurada"
+                className="w-full h-28 object-cover rounded-lg border"
+              />
+            )}
+
             <Input
               value={active.depurada}
               onChange={(e) => setField("depurada", sanitize(e.target.value))}
@@ -98,9 +108,18 @@ export function AnalisisCard() {
             />
           </div>
 
-          {/* Renovada */}
-          <div className="space-y-1">
+          {/* Agua renovada */}
+          <div className="space-y-2">
             <label className="text-sm font-medium">Agua renovada (m³)</label>
+
+            {active.img2 && (
+              <img
+                src={active.img2}
+                alt="Contador agua renovada"
+                className="w-full h-28 object-cover rounded-lg border"
+              />
+            )}
+
             <Input
               value={active.renovada}
               onChange={(e) => setField("renovada", sanitize(e.target.value))}
@@ -110,6 +129,7 @@ export function AnalisisCard() {
               step="0.1"
             />
           </div>
+
         </div>
 
         {/* Transparencia */}

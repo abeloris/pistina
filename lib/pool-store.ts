@@ -22,6 +22,30 @@ export interface PoolRecord {
     filtroTimerEnd: number | null
 }
 
+type Mode = "create" | "edit"
+
+interface PoolStore {
+    active: PoolRecord
+    historial: PoolRecord[]
+    mode: Mode
+    editingIndex: number | null
+
+    startNew: () => void
+    finishDay: () => void
+    setField: <K extends keyof PoolRecord>(k: K, v: PoolRecord[K]) => void
+    toggleCheck: (i: number) => void
+    setImage: (k: "img1" | "img2", v: string) => void
+
+    save: () => void
+    editRecord: (i: number) => void
+    deleteRecord: (i: number) => void
+    reset: () => void
+
+    exportDataJson: () => void
+    exportDataCsv: () => void
+    exportDataTxt: () => void
+}
+
 const EMPTY: PoolRecord = {
     start: "",
     end: "",
@@ -38,34 +62,19 @@ const EMPTY: PoolRecord = {
     filtroTimerEnd: null,
 }
 
-type Mode = "create" | "edit"
-
 const pad = (n: number) => String(n).padStart(2, "0")
 
-const nowTime = () => {
+const nowTime = (): string => {
     const d = new Date()
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-const today = () => {
+const today = (): string => {
     const d = new Date()
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-const build = (date: string) => `${date}T${nowTime()}`
-
-/**
- * IMPORTANT:
- * Keep everything in LOCAL time (avoid UTC shift from toISOString)
- */
-const toLocalISO = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, "0")
-
-    return (
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-        `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-    )
-}
+const build = (date: string): string => `${date}T${nowTime()}`
 
 const recalc = (r: PoolRecord): PoolRecord => {
     const l = parseFloat(r.clLibre)
@@ -73,29 +82,13 @@ const recalc = (r: PoolRecord): PoolRecord => {
 
     return {
         ...r,
-        clComb: !isNaN(l) && !isNaN(t) ? Math.max(0, t - l).toFixed(2) : "",
+        clComb: !isNaN(l) && !isNaN(t)
+            ? Math.max(0, t - l).toFixed(2)
+            : "",
     }
 }
 
-interface Store {
-    active: PoolRecord
-    historial: PoolRecord[]
-    mode: Mode
-    editingIndex: number | null
-
-    startNew: () => void
-    finishDay: () => void
-    setField: <K extends keyof PoolRecord>(k: K, v: PoolRecord[K]) => void
-    toggleCheck: (i: number) => void
-    setImage: (k: "img1" | "img2", v: string) => void
-    save: () => void
-    exportData: () => void
-    editRecord: (i: number) => void
-    deleteRecord: (i: number) => void
-    reset: () => void
-}
-
-export const usePoolStore = create<Store>()(
+export const usePoolStore = create<PoolStore>()(
     persist(
         (set, get) => ({
             active: { ...EMPTY },
@@ -140,7 +133,13 @@ export const usePoolStore = create<Store>()(
                 set((s) => {
                     const checks = [...s.active.checks]
                     checks[i] = !checks[i]
-                    return { active: { ...s.active, checks } }
+
+                    return {
+                        active: {
+                            ...s.active,
+                            checks,
+                        },
+                    }
                 })
             },
 
@@ -159,11 +158,11 @@ export const usePoolStore = create<Store>()(
                 if (!active.start) return
 
                 if (mode === "edit" && editingIndex !== null) {
-                    const h = [...historial]
-                    h[editingIndex] = active
+                    const updated = [...historial]
+                    updated[editingIndex] = active
 
                     set({
-                        historial: h,
+                        historial: updated,
                         active: { ...EMPTY },
                         mode: "create",
                         editingIndex: null,
@@ -177,22 +176,6 @@ export const usePoolStore = create<Store>()(
                     mode: "create",
                     editingIndex: null,
                 })
-            },
-
-            exportData() {
-                const blob = new Blob(
-                    [JSON.stringify(get().historial, null, 2)],
-                    { type: "application/json" }
-                )
-
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement("a")
-
-                a.href = url
-                a.download = "historial_piscina.json"
-                a.click()
-
-                URL.revokeObjectURL(url)
             },
 
             editRecord(i) {
@@ -218,6 +201,103 @@ export const usePoolStore = create<Store>()(
                     mode: "create",
                     editingIndex: null,
                 })
+            },
+
+            // -------------------------
+            // EXPORTS
+            // -------------------------
+
+            exportDataJson() {
+                const data = get().historial
+
+                const blob = new Blob(
+                    [JSON.stringify(data, null, 2)],
+                    { type: "application/json" }
+                )
+
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+
+                a.href = url
+                a.download = "historial_piscina.json"
+                a.click()
+
+                URL.revokeObjectURL(url)
+            },
+
+            exportDataCsv() {
+                const data = get().historial
+
+                const headers = [
+                    "start",
+                    "end",
+                    "ph",
+                    "clLibre",
+                    "clTotal",
+                    "clComb",
+                    "depurada",
+                    "renovada",
+                    "transparencia",
+                ]
+
+                const rows = data.map((r) =>
+                    [
+                        r.start,
+                        r.end,
+                        r.ph,
+                        r.clLibre,
+                        r.clTotal,
+                        r.clComb,
+                        r.depurada,
+                        r.renovada,
+                        r.transparencia,
+                    ]
+                        .map((v) => v ?? "")
+                        .join(",")
+                )
+
+                const csv = [headers.join(","), ...rows].join("\n")
+
+                const blob = new Blob([csv], { type: "text/csv" })
+                const url = URL.createObjectURL(blob)
+
+                const a = document.createElement("a")
+                a.href = url
+                a.download = "historial_piscina.csv"
+                a.click()
+
+                URL.revokeObjectURL(url)
+            },
+
+            exportDataTxt() {
+                const data = get().historial
+
+                const text = data
+                    .map(
+                        (r, i) => `
+Registro ${i + 1}
+Fecha: ${r.start} → ${r.end}
+pH: ${r.ph}
+Cl libre: ${r.clLibre}
+Cl total: ${r.clTotal}
+Cl combinado: ${r.clComb}
+Depurada: ${r.depurada} m³
+Renovada: ${r.renovada} m³
+Transparencia: ${r.transparencia ? "Sí" : "No"}
+-------------------
+`
+                    )
+                    .join("\n")
+
+                const blob = new Blob([text], { type: "text/plain" })
+                const url = URL.createObjectURL(blob)
+
+                const a = document.createElement("a")
+                a.href = url
+                a.download = "historial_piscina.txt"
+                a.click()
+
+                URL.revokeObjectURL(url)
             },
         }),
         {
