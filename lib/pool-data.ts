@@ -47,26 +47,22 @@ export const DAILY_TASKS: TaskInfo[] = [
         ],
     },
     {
-        title: "Relleno de la piscina",
-        steps: [
-            "Cerrar primera llave B desde la entrada",
-            "Abrir llave llenado 3 puntos",
-            "Rellenar agua hasta la mitad del skimmer central.",
-            "Analizar pH con Phenol Red.",
-            "Analizar cloro libre con DPD1.",
-            "Analizar cloro total con DPD3.",
-        ],
-    },
-    {
         title: "Depuración",
         steps: [
             "Parar la bomba antes de tocar las válvulas.",
-            "Encender la bomba.",
+            "Encender la bomba y dejarla así todo el día.",
         ],
         valves: {
             open: ["Fondo", "Skimmer", "1", "4"],
             close: ["Limpiafondos", "2", "3", "5"],
         },
+    },
+    {
+        title: "Relleno de la piscina",
+        steps: [
+            "Abrir llave llenado 3 puntos",
+            "Rellenar agua hasta la mitad del skimmer central.",
+        ],
     },
 ]
 
